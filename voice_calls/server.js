@@ -5,6 +5,7 @@ const cors = require("cors");
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 app.use(express.static(__dirname));
 
 const server = http.createServer(app);
@@ -29,12 +30,14 @@ io.on("connection", (socket) => {
 
     voiceRooms[roomId].push(socket.id);
 
-    socket.to(roomId).emit("user-joined", socket.id);
+    console.log(`${socket.id} joined ${roomId}`);
 
     socket.emit(
       "existing-users",
       voiceRooms[roomId].filter((id) => id !== socket.id)
     );
+
+    socket.to(roomId).emit("user-joined", socket.id);
   });
 
   socket.on("webrtc-signal", ({ targetId, signal }) => {
@@ -45,10 +48,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+
     for (let roomId in voiceRooms) {
       voiceRooms[roomId] = voiceRooms[roomId].filter(
         (id) => id !== socket.id
       );
+
       socket.to(roomId).emit("user-left", socket.id);
     }
   });
