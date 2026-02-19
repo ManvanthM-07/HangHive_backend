@@ -1,8 +1,8 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from typing import List, Dict
 
-app = FastAPI()
+router = APIRouter(tags=["work"])
 
 # ─── Work context definitions ──────────────────────────────────────────────────
 WORK_CONTEXTS = {
@@ -741,12 +741,12 @@ work_manager = WorkConnectionManager()
 
 
 # ─── Routes ─────────────────────────────────────────────────────────────────────
-@app.get("/")
+@router.get("/work")
 async def get():
     return HTMLResponse(html)
 
 
-@app.websocket("/ws/work/{room_id}/{client_id}")
+@router.websocket("/ws/work/{room_id}/{client_id}")
 async def work_websocket(
     websocket: WebSocket,
     room_id: str,
