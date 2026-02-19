@@ -4,16 +4,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from chat import router as chat_router
 from routes.signup import router as signup_router
 from routes.login import router as login_router
+from routes.communities import router as communities_router
+from communities.create_own import router as system_communities_router
 from voice import router as voice_router
 from video import router as video_router
 from communities.work import router as work_router
+from communities.art import router as art_router
+from communities.gaming import router as gaming_router
+from communities.study import router as study_router
+from communities.friends import router as friends_router
 from db import engine, Base
 import models
 
 # ─── Database Initialization ──────────────────────────────────────────────────
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HangHive API", version="1.0.0")
+app = FastAPI(title="HangHive API RELOAD TEST", version="1.0.1")
+
+@app.get("/debug-routes")
+def debug_routes():
+    return [route.path for route in app.routes]
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 # Allow the Vite dev server (port 5173) and any future origins
@@ -31,10 +41,11 @@ app.add_middleware(
 # ─── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(signup_router)
 app.include_router(login_router)
+app.include_router(communities_router)
+app.include_router(system_communities_router, prefix="/system-communities")
 app.include_router(chat_router)    # /ws/{room_id}/{client_id}  (WebSocket)
 app.include_router(voice_router)   # /ws/voice/*
 app.include_router(video_router)   # /ws/video/*
-app.include_router(work_router)    # /work and /ws/work/*
 
 
 @app.get("/", response_class=HTMLResponse)
