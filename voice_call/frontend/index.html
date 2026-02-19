@@ -1,98 +1,171 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Voice Call</title>
+    <title>Group Voice Call</title>
 </head>
 <body>
-    <h2>Voice Call Test</h2>
 
-    <input id="roomInput" placeholder="Enter Room ID" />
-    <button onclick="joinRoom()">Join Room</button>
-    <button onclick="startCall()">Call</button>
+<h2>Group Voice Call</h2>
 
-    <script>
-        let socket;
-        let peerConnection;
-        let localStream;
-        let roomId;
+<button onclick="createRoom()">➕ Create Room</button>
+<br><br>
 
-        const config = {
-            iceServers: [
-                { urls: "stun:stun.l.google.com:19302" }
-            ]
-        };
+<input id="roomInput" placeholder="Enter Room ID">
+<button onclick="joinRoom()">📞 Join</button>
+<button onclick="toggleMute()">🔇 Mute</button>
+<button onclick="endCall()">❌ End</button>
 
-        async function joinRoom() {
-            roomId = document.getElementById("roomInput").value;
+<p id="status">Not Connected</p>
+<p id="muteStatus">Unmuted 🎤</p>
 
-            socket = new WebSocket(`ws://127.0.0.1:8000/ws/${roomId}`);
+<div id="audios"></div>
 
-            socket.onopen = () => {
-                console.log("Connected to signaling server");
-            };
+<script>
+let localStream;
+let socket;
+let roomId;
+let userId = Math.random().toString(36).substring(2, 9);
+let peers = {};
+let isMuted = false;
 
-            socket.onmessage = async (event) => {
-                const data = JSON.parse(event.data);
+async function createRoom() {
+    const res = await fetch("http://127.0.0.1:8000/create-room", {
+        method: "POST"
+    });
+    const data = await res.json();
+    document.getElementById("roomInput").value = data.room_id;
+    alert("Room Created: " + data.room_id);
+}
 
-                if (data.offer) {
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-                    socket.send(JSON.stringify({ answer }));
-                }
+async function joinRoom() {
+    roomId = document.getElementById("roomInput").value;
+    if (!roomId) return alert("Enter Room ID");
 
-                if (data.answer) {
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                }
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+        alert("Microphone permission denied!");
+        return;
+    }
 
-                if (data.ice) {
-                    try {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(data.ice));
-                    } catch (e) {
-                        console.error("ICE error:", e);
-                    }
-                }
-            };
+    socket = new WebSocket(`ws://127.0.0.1:8000/ws/${roomId}/${userId}`);
 
-            await initPeer();
+    socket.onopen = () => {
+        document.getElementById("status").innerText = "Connected";
+    };
+
+    socket.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "new-user") {
+            createPeer(data.user_id, true);
         }
 
-        async function initPeer() {
-            peerConnection = new RTCPeerConnection(config);
+        if (data.type === "offer") {
+            createPeer(data.sender, false, data.offer);
+        }
 
-            // Get microphone
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (data.type === "answer") {
+            await peers[data.sender].setRemoteDescription(data.answer);
+        }
 
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
+        if (data.type === "candidate") {
+            await peers[data.sender].addIceCandidate(data.candidate);
+        }
+
+        if (data.type === "user-left") {
+            if (peers[data.user_id]) {
+                peers[data.user_id].close();
+                delete peers[data.user_id];
+            }
+        }
+    };
+}
+
+function createPeer(targetId, initiator, offer=null) {
+
+    const peer = new RTCPeerConnection({
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" }
+        ]
+    });
+
+    peers[targetId] = peer;
+
+    localStream.getTracks().forEach(track => {
+        peer.addTrack(track, localStream);
+    });
+
+    peer.ontrack = event => {
+        let audio = document.createElement("audio");
+        audio.srcObject = event.streams[0];
+        audio.autoplay = true;
+        audio.controls = true;
+        audio.playsInline = true;
+
+        document.getElementById("audios").appendChild(audio);
+
+        audio.play().catch(() => {
+            console.log("Autoplay blocked. Click play.");
+        });
+    };
+
+    peer.onicecandidate = event => {
+        if (event.candidate) {
+            socket.send(JSON.stringify({
+                type: "candidate",
+                target: targetId,
+                sender: userId,
+                candidate: event.candidate
+            }));
+        }
+    };
+
+    if (initiator) {
+        peer.createOffer().then(offer => {
+            peer.setLocalDescription(offer);
+            socket.send(JSON.stringify({
+                type: "offer",
+                target: targetId,
+                sender: userId,
+                offer: offer
+            }));
+        });
+    } else {
+        peer.setRemoteDescription(offer).then(() => {
+            peer.createAnswer().then(answer => {
+                peer.setLocalDescription(answer);
+                socket.send(JSON.stringify({
+                    type: "answer",
+                    target: targetId,
+                    sender: userId,
+                    answer: answer
+                }));
             });
+        });
+    }
+}
 
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    socket.send(JSON.stringify({ ice: event.candidate }));
-                }
-            };
+function toggleMute() {
+    if (!localStream) return;
 
-            peerConnection.ontrack = (event) => {
-                console.log("Receiving audio");
+    isMuted = !isMuted;
+    localStream.getAudioTracks()[0].enabled = !isMuted;
 
-                const remoteAudio = document.createElement("audio");
-                remoteAudio.srcObject = event.streams[0];
-                remoteAudio.autoplay = true;
-                remoteAudio.controls = true;
-                document.body.appendChild(remoteAudio);
+    document.getElementById("muteStatus").innerText =
+        isMuted ? "Muted 🔇" : "Unmuted 🎤";
+}
 
-                remoteAudio.play().catch(e => {
-                    console.log("Autoplay blocked, user interaction needed");
-                });
-            };
-        }
+function endCall() {
+    for (let id in peers) {
+        peers[id].close();
+    }
 
-        async function startCall() {
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            socket.send(JSON.stringify({ offer }));
-        }
-    </script>
+    if (socket) socket.close();
+
+    document.getElementById("status").innerText = "Disconnected";
+}
+</script>
+
 </body>
 </html>

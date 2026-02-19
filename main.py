@@ -1,11 +1,9 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, List
-import json
+import uuid
 
 app = FastAPI()
 
-# Allow frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,30 +12,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Store room connections
-rooms: Dict[str, List[WebSocket]] = {}
+rooms = {}
 
 @app.get("/")
 def home():
-    return {"message": "Voice Call Backend Running"}
+    return {"message": "Group Voice Server Running"}
 
-@app.websocket("/ws/{room_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str):
+@app.post("/create-room")
+def create_room():
+    room_id = str(uuid.uuid4())[:8]
+    rooms[room_id] = {}
+    return {"room_id": room_id}
+
+@app.websocket("/ws/{room_id}/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
     await websocket.accept()
 
     if room_id not in rooms:
-        rooms[room_id] = []
+        rooms[room_id] = {}
 
-    rooms[room_id].append(websocket)
+    rooms[room_id][user_id] = websocket
+
+    # Notify existing users
+    for uid, conn in rooms[room_id].items():
+        if uid != user_id:
+            await conn.send_json({
+                "type": "new-user",
+                "user_id": user_id
+            })
 
     try:
         while True:
-            data = await websocket.receive_text()
+            data = await websocket.receive_json()
+            target = data.get("target")
 
-            # Broadcast to others in same room
-            for connection in rooms[room_id]:
-                if connection != websocket:
-                    await connection.send_text(data)
+            if target in rooms[room_id]:
+                await rooms[room_id][target].send_json(data)
 
     except WebSocketDisconnect:
-        rooms[room_id].remove(websocket)
+        del rooms[room_id][user_id]
+
+        for conn in rooms[room_id].values():
+            await conn.send_json({
+                "type": "user-left",
+                "user_id": user_id
+            })
