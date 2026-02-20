@@ -21,6 +21,12 @@ class VideoConnectionManager:
             if not self.active_connections[room_id]:
                 del self.active_connections[room_id]
 
+    async def send_to_client(self, message: dict, room_id: str, target_client: str):
+        if room_id in self.active_connections:
+            if target_client in self.active_connections[room_id]:
+                conn, name = self.active_connections[room_id][target_client]
+                await conn.send_json(message)
+
     async def broadcast(self, message: dict, room_id: str, exclude_client: str = None):
         if room_id in self.active_connections:
             for c_id, (conn, name) in self.active_connections[room_id].items():
@@ -47,7 +53,11 @@ async def video_websocket_endpoint(websocket: WebSocket, room_id: str, client_id
     try:
         while True:
             data = await websocket.receive_json()
-            await manager.broadcast(data, room_id, exclude_client=client_id)
+            target = data.get("target")
+            if target:
+                await manager.send_to_client(data, room_id, target)
+            else:
+                await manager.broadcast(data, room_id, exclude_client=client_id)
     except WebSocketDisconnect:
         manager.disconnect(room_id, client_id)
         participants = manager.get_participants(room_id)
