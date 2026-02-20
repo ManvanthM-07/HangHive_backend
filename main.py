@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+import uuid
 from chat import router as chat_router
 from routes.signup import router as signup_router
 from routes.login import router as login_router
@@ -38,6 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+rooms = {}
 # ─── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(signup_router)
 app.include_router(login_router)
@@ -50,6 +52,47 @@ app.include_router(video_router)   # /ws/video/*
 
 @app.get("/", response_class=HTMLResponse)
 def home():
+    return {"message": "Group Voice Server Running"}
+
+@app.post("/create-room")
+def create_room():
+    room_id = str(uuid.uuid4())[:8]
+    rooms[room_id] = {}
+    return {"room_id": room_id}
+
+@app.websocket("/ws/{room_id}/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
+    await websocket.accept()
+
+    if room_id not in rooms:
+        rooms[room_id] = {}
+
+    rooms[room_id][user_id] = websocket
+
+    # Notify existing users
+    for uid, conn in rooms[room_id].items():
+        if uid != user_id:
+            await conn.send_json({
+                "type": "new-user",
+                "user_id": user_id
+            })
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            target = data.get("target")
+
+            if target in rooms[room_id]:
+                await rooms[room_id][target].send_json(data)
+
+    except WebSocketDisconnect:
+        del rooms[room_id][user_id]
+
+        for conn in rooms[room_id].values():
+            await conn.send_json({
+                "type": "user-left",
+                "user_id": user_id
+            })
     return """
 <!DOCTYPE html>
 <html lang="en">
