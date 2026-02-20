@@ -20,19 +20,8 @@ import models
 # ─── Database Initialization ──────────────────────────────────────────────────
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HangHive API RELOAD TEST", version="1.0.1")
+app = FastAPI(title="HangHive API", version="1.0.1")
 
-# ─── CORS ─────────────────────────────────────────────────────────────────────
-cors = CORSMiddleware(
-    app,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 @app.get("/debug-routes")
 def debug_routes():
     return [route.path for route in app.routes]
@@ -44,6 +33,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:8000",
+        "https://hanghive.vercel.app", # Adding likely production frontend URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -51,6 +41,7 @@ app.add_middleware(
 )
 
 rooms = {}
+
 # ─── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(signup_router)
 app.include_router(login_router)
@@ -60,50 +51,8 @@ app.include_router(chat_router)    # /ws/{room_id}/{client_id}  (WebSocket)
 app.include_router(voice_router)   # /ws/voice/*
 app.include_router(video_router)   # /ws/video/*
 
-
 @app.get("/", response_class=HTMLResponse)
 def home():
-    return {"message": "Group Voice Server Running"}
-
-@app.post("/create-room")
-def create_room():
-    room_id = str(uuid.uuid4())[:8]
-    rooms[room_id] = {}
-    return {"room_id": room_id}
-
-@app.websocket("/ws/{room_id}/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
-    await websocket.accept()
-
-    if room_id not in rooms:
-        rooms[room_id] = {}
-
-    rooms[room_id][user_id] = websocket
-
-    # Notify existing users
-    for uid, conn in rooms[room_id].items():
-        if uid != user_id:
-            await conn.send_json({
-                "type": "new-user",
-                "user_id": user_id
-            })
-
-    try:
-        while True:
-            data = await websocket.receive_json()
-            target = data.get("target")
-
-            if target in rooms[room_id]:
-                await rooms[room_id][target].send_json(data)
-
-    except WebSocketDisconnect:
-        del rooms[room_id][user_id]
-
-        for conn in rooms[room_id].values():
-            await conn.send_json({
-                "type": "user-left",
-                "user_id": user_id
-            })
     return """
 <!DOCTYPE html>
 <html lang="en">
