@@ -27,15 +27,18 @@ def debug_routes():
     return [route.path for route in app.routes]
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-# Allow the Vite dev server (port 5173) and any future origins
+# Allow the Vite dev server, local origins, and all Vercel deployments
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "http://localhost:3000",
         "http://127.0.0.1:8000",
+        "http://127.0.0.1:5173",
         "https://hanghive.vercel.app",
         "https://hang-hive-wlf4.vercel.app",
     ],
+    allow_origin_regex="https://hanghive-.*\.vercel\.app", # Support all Vercel preview deployments
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
