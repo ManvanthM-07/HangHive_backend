@@ -14,6 +14,7 @@ from communities.art import router as art_router
 from communities.gaming import router as gaming_router
 from communities.study import router as study_router
 from communities.friends import router as friends_router
+from routes.media import router as media_router
 from db import engine, Base
 import models
 
@@ -54,6 +55,7 @@ app.include_router(system_communities_router, prefix="/system-communities")
 app.include_router(chat_router)    # /ws/{room_id}/{client_id}  (WebSocket)
 app.include_router(voice_router)   # /ws/voice/*
 app.include_router(video_router)   # /ws/video/*
+app.include_router(media_router)
 
 @app.get("/", response_class=HTMLResponse)
 def home():
