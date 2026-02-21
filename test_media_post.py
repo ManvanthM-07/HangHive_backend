@@ -8,8 +8,8 @@ def test_post():
         'title': 'Manual Test Media',
         'url': 'https://images.unsplash.com/photo-1541701494587-cb58502866ab',
         'type': 'image',
-        'owner_id': 1,
-        'community_id': 1
+        'owner_id': 24,
+        'community_id': 30
     }
     encoded_data = json.dumps(data).encode('utf-8')
     req = urllib.request.Request(url, data=encoded_data, headers={'Content-Type': 'application/json'})
@@ -19,7 +19,10 @@ def test_post():
             print(f"STATUS: {response.getcode()}")
             print(f"RESPONSE: {response.read().decode()}")
     except Exception as e:
-        print(f"ERROR: {e}")
+        if hasattr(e, 'read'):
+            print(f"ERROR: {e.read().decode()}")
+        else:
+            print(f"ERROR: {e}")
 
 if __name__ == "__main__":
     test_post()
