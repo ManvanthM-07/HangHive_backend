@@ -21,6 +21,27 @@ import models
 # ─── Database Initialization ──────────────────────────────────────────────────
 Base.metadata.create_all(bind=engine)
 
+# ─── Seed System Communities on Startup ───────────────────────────────────────
+# This ensures system nodes exist in the DB (especially on Render where the DB
+# may be fresh). Uses the same get_or_create logic as the system-nodes endpoint.
+try:
+    from communities.create_own import get_or_create_system_community, SYSTEM_COMMUNITY_DEFS
+    from db import SessionLocal
+    _seed_db = SessionLocal()
+    try:
+        for _defn in SYSTEM_COMMUNITY_DEFS:
+            get_or_create_system_community(
+                purpose=_defn["purpose"],
+                name=_defn["name"],
+                description=_defn["description"],
+                db=_seed_db
+            )
+        print("[STARTUP] System communities seeded successfully.")
+    finally:
+        _seed_db.close()
+except Exception as _seed_err:
+    print(f"[STARTUP] Warning: system community seeding failed: {_seed_err}")
+
 app = FastAPI(title="HangHive API", version="1.0.1")
 
 @app.get("/debug-routes")

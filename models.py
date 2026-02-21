@@ -13,8 +13,6 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     password = Column(String)  # plaintext per user instructions
 
-    # Communities owned by this user
-    owned_communities = relationship("Community", back_populates="owner")
     messages = relationship("Message", back_populates="sender")
 
 class Community(Base):
@@ -25,10 +23,8 @@ class Community(Base):
     purpose = Column(String) # "personal", "others", etc.
     visibility = Column(String) # "public", "private"
     description = Column(Text, nullable=True)
-    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner_id = Column(Integer, nullable=True)  # nullable so system communities (owner_id=0) don't violate FK
     access_code = Column(String, nullable=True, unique=True, index=True)  # Random code for private communities
-
-    owner = relationship("User", back_populates="owned_communities")
 
 class MediaItem(Base):
     __tablename__ = "media_items"
