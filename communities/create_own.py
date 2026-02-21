@@ -40,9 +40,9 @@ def get_or_create_system_community(purpose: str, name: str, description: str, db
     System communities are identified by a null or zero owner_id and the given purpose.
     We use owner_id=None (SQL NULL) which bypasses FK constraints on PostgreSQL.
     """
+    # Try to find existing by purpose — don't filter on owner_id to catch any pre-existing ones
     community = db.query(Community).filter(
-        Community.purpose == purpose,
-        Community.owner_id.in_([0, None])
+        Community.purpose == purpose
     ).first()
 
     if not community:
@@ -61,13 +61,14 @@ def get_or_create_system_community(purpose: str, name: str, description: str, db
     return community
 
 
-@router.get("/system-nodes", response_model=List[Dict])
+@router.get("/system-nodes", response_model=None)
 def list_system_communities(db: Session = Depends(get_db)):
     """
     Returns the system communities with their REAL database integer IDs.
     Seeds them into the database on first call if they don't yet exist.
     """
     result = []
+    errors = []
     for defn in SYSTEM_COMMUNITY_DEFS:
         try:
             community = get_or_create_system_community(
@@ -77,7 +78,7 @@ def list_system_communities(db: Session = Depends(get_db)):
                 db=db
             )
             result.append({
-                "id": community.id,           # Real integer DB ID
+                "id": community.id,
                 "name": community.name,
                 "purpose": community.purpose,
                 "visibility": community.visibility,
@@ -85,7 +86,12 @@ def list_system_communities(db: Session = Depends(get_db)):
                 "owner_id": community.owner_id,
             })
         except Exception as e:
-            # Fallback: don't crash the whole endpoint if one community fails
-            print(f"[SYSTEM_COMMUNITY] Error seeding {defn['purpose']}: {e}")
+            import traceback
+            tb = traceback.format_exc()
+            print(f"[SYSTEM_COMMUNITY] Error seeding {defn['purpose']}: {e}\n{tb}")
+            errors.append({"purpose": defn["purpose"], "error": str(e)})
 
+    if errors:
+        # Return errors so we can diagnose via the API
+        return {"communities": result, "errors": errors}
     return result
