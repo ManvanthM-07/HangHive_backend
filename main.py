@@ -40,6 +40,7 @@ app.add_middleware(
         "http://localhost:8000",
         "https://hanghive.vercel.app",
         "https://hang-hive-wlf4.vercel.app",
+        "https://hang-hive-569m.vercel.app",
     ],
     allow_origin_regex="https://hanghive-.*\.vercel\.app", # Support all Vercel preview deployments
     allow_credentials=True,
