@@ -37,11 +37,12 @@ SYSTEM_COMMUNITY_DEFS = [
 def get_or_create_system_community(purpose: str, name: str, description: str, db: Session) -> Community:
     """
     Get the system community from the DB by purpose, or create it if it doesn't exist.
-    System communities are identified by owner_id=0 and the given purpose.
+    System communities are identified by a null or zero owner_id and the given purpose.
+    We use owner_id=None (SQL NULL) which bypasses FK constraints on PostgreSQL.
     """
     community = db.query(Community).filter(
-        Community.owner_id == 0,
-        Community.purpose == purpose
+        Community.purpose == purpose,
+        Community.owner_id.in_([0, None])
     ).first()
 
     if not community:
@@ -50,7 +51,7 @@ def get_or_create_system_community(purpose: str, name: str, description: str, db
             purpose=purpose,
             visibility="public",
             description=description,
-            owner_id=0,
+            owner_id=None,  # NULL avoids FK violations on PostgreSQL
             access_code=None  # System communities don't need an access code
         )
         db.add(community)
